@@ -174,6 +174,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "dbfread" },
+    { name = "numpy" },
     { name = "pandas" },
     { name = "pyarrow" },
     { name = "pyreaddbc" },
@@ -188,6 +189,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "dbfread", specifier = ">=2.0.7" },
+    { name = "numpy", specifier = ">=2.5.5" },
     { name = "pandas", specifier = ">=3.1.1" },
     { name = "pyarrow", specifier = ">=26.0.1" },
     { name = "pyreaddbc", specifier = ">=2.0.4" },

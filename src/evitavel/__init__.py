@@ -28,34 +28,97 @@ def cmd_baixar(args: argparse.Namespace) -> None:
         baixar_mes(args.uf, args.ano, mes, DADOS_BRUTOS / args.uf)
 
 
+def _anos(texto: str) -> list[int]:
+    return _meses(texto)  # mesmo formato: '2024', '2015-2025', '2019,2024'
+
+
+def _cache_sih(uf: str) -> Path:
+    return DADOS_PROCESSADOS / "sih" / uf
+
+
+def _arquivos_do_ano(uf: str, ano: int) -> tuple[list[Path], list[str]]:
+    """Arquivos que podem conter internações ocorridas em `ano`.
+
+    Os arquivos são por mês de processamento: uma internação de dezembro pode
+    ser processada meses depois. Por isso entram os 12 meses do ano e os do ano
+    seguinte. Devolve também os meses que faltam baixar.
+    """
+    from evitavel.download import nome_arquivo
+
+    existentes, faltando = [], []
+    for a in (ano, ano + 1):
+        for mes in range(1, 13):
+            caminho = DADOS_BRUTOS / uf / nome_arquivo(uf, a, mes)
+            em_cache = (_cache_sih(uf) / caminho.with_suffix(".parquet").name).exists()
+            if caminho.exists() or em_cache:
+                existentes.append(caminho)
+            elif a == ano or mes <= 6:
+                faltando.append(caminho.stem)
+    return existentes, faltando
+
+
 def cmd_analisar(args: argparse.Namespace) -> None:
     import pandas as pd
 
-    from evitavel.process import ler_dbc, marcar_icsap, resumo_por_municipio
+    from evitavel.populacao import populacao_por_idade
+    from evitavel.process import (carregar, contagens, marcar_icsap,
+                                  nomes_municipios, resumir)
+    from evitavel.territorio import regioes_de_saude
 
-    arquivos = sorted((DADOS_BRUTOS / args.uf).glob(f"RD{args.uf}{args.ano % 100:02d}*.dbc"))
-    if not arquivos:
-        raise SystemExit(f"Nenhum arquivo de {args.uf}/{args.ano}. Rode 'evitavel baixar' antes.")
+    anos = _anos(args.anos)
+    arquivos: set[Path] = set()
+    for ano in anos:
+        existentes, faltando = _arquivos_do_ano(args.uf, ano)
+        if not any(a.stem[-4:-2] == f"{ano % 100:02d}" for a in existentes):
+            raise SystemExit(f"Nenhum arquivo de {args.uf}/{ano}. Rode 'evitavel baixar' antes.")
+        if faltando:
+            print(f"Aviso: {ano} pode estar incompleto, faltam {', '.join(faltando)}")
+        arquivos.update(existentes)
 
     print(f"Lendo {len(arquivos)} arquivo(s)...")
-    df = marcar_icsap(pd.concat([ler_dbc(a) for a in arquivos], ignore_index=True))
+    cache = _cache_sih(args.uf)
+    df = pd.concat([carregar(a, cache) for a in sorted(arquivos)], ignore_index=True)
+    df = marcar_icsap(df)
+    df = df[df["ANO_INTER"].isin(anos)]
 
-    DADOS_PROCESSADOS.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(DADOS_PROCESSADOS / f"internacoes_{args.uf}_{args.ano}.parquet")
+    cont = contagens(df)
+    pop = populacao_por_idade(args.uf, anos, DADOS_BRUTOS / "popsvs", DADOS_PROCESSADOS)
+    territorio = nomes_municipios(args.uf).merge(
+        regioes_de_saude(args.uf, DADOS_BRUTOS, DADOS_PROCESSADOS), on="MUNIC_RES"
+    )
+    municipios = resumir(cont, pop, territorio, ["MUNIC_RES"])
+    regioes = resumir(cont, pop, territorio, ["CO_REGSAUD"])
 
-    resumo = resumo_por_municipio(df, args.uf)
     RELATORIOS.mkdir(parents=True, exist_ok=True)
-    saida = RELATORIOS / f"icsap_municipios_{args.uf}_{args.ano}.csv"
-    resumo.to_csv(saida, index=False)
+    periodo = str(anos[0]) if len(anos) == 1 else f"{min(anos)}-{max(anos)}"
+    saidas = []
+    for nome, tabela in [("municipios", municipios), ("regioes", regioes)]:
+        saida = RELATORIOS / f"icsap_{nome}_{args.uf}_{periodo}.csv"
+        tabela.to_csv(saida, index=False)
+        saidas.append(saida)
 
-    total, icsap = len(df), int(df["ICSAP"].sum())
-    print(f"\n{total:,} internações, {icsap:,} evitáveis ({100 * icsap / total:.1f}%)")
-    print(f"Custo das evitáveis: R$ {df.loc[df['ICSAP'], 'VAL_TOT'].sum():,.0f}")
-    print("\nGrupos mais frequentes:")
-    print(df["GRUPO_ICSAP"].value_counts().head(5).to_string())
-    print("\nMunicípios com mais internações evitáveis:")
-    print(resumo.head(10).to_string(index=False))
-    print(f"\nTabela completa: {saida}")
+    print("\nPor ano (residentes do estado):")
+    por_ano = municipios.groupby("ano")[["internacoes_sem_parto", "icsap",
+                                         "custo_icsap_reais", "populacao"]].sum()
+    por_ano["proporcao_pct"] = 100 * por_ano["icsap"] / por_ano["internacoes_sem_parto"]
+    por_ano["taxa_10mil"] = 1e4 * por_ano["icsap"] / por_ano["populacao"]
+    print(por_ano.round(1).to_string())
+
+    ultimo = max(anos)
+    colunas = ["populacao", "icsap", "taxa_icsap_10mil", "taxa_padronizada_10mil",
+               "rme", "rme_ic95_inf", "rme_ic95_sup"]
+    print(f"\nRegiões de saúde em {ultimo}, da maior para a menor RME:")
+    print(regioes[regioes["ano"] == ultimo].sort_values("rme", ascending=False)[
+        ["REGIAO_SAUDE"] + colunas].round(2).to_string(index=False))
+
+    acima = municipios[(municipios["ano"] == ultimo)
+                       & (municipios["populacao"] >= args.pop_minima)
+                       & (municipios["rme_ic95_inf"] > 1)]
+    print(f"\nMunicípios com {args.pop_minima:,}+ habitantes claramente acima do "
+          f"esperado em {ultimo} ({len(acima)} no total, 10 maiores RME):")
+    print(acima.nlargest(10, "rme")[["MUNICIPIO", "REGIAO_SAUDE"] + colunas]
+          .round(2).to_string(index=False))
+    print("\nTabelas completas:\n" + "\n".join(f"  {s}" for s in saidas))
 
 
 def main() -> None:
@@ -68,9 +131,14 @@ def main() -> None:
     ]:
         p = sub.add_parser(nome, help=ajuda)
         p.add_argument("--uf", default="RS", type=str.upper)
-        p.add_argument("--ano", type=int, required=True)
         if nome == "baixar":
+            p.add_argument("--ano", type=int, required=True)
             p.add_argument("--meses", default="1-12", help="ex.: 1-12, 3 ou 1,4,7")
+        else:
+            p.add_argument("--anos", required=True, help="ex.: 2024, 2015-2025")
+        if nome != "baixar":
+            p.add_argument("--pop-minima", type=int, default=20_000,
+                           help="população mínima no ranking da tela (padrão: 20000)")
         p.set_defaults(func=func)
 
     args = parser.parse_args()
