@@ -121,6 +121,50 @@ def cmd_analisar(args: argparse.Namespace) -> None:
     print("\nTabelas completas:\n" + "\n".join(f"  {s}" for s in saidas))
 
 
+def cmd_prever(args: argparse.Namespace) -> None:
+    import pandas as pd
+
+    from evitavel.previsao import montar_base, prever_proximo_ano, validar
+
+    serie = RELATORIOS / f"icsap_municipios_{args.uf}_{args.periodo}.csv"
+    if not serie.exists():
+        raise SystemExit(f"{serie} não existe. Rode 'evitavel analisar --anos {args.periodo}' antes.")
+    municipios = pd.read_csv(serie, dtype={"MUNIC_RES": str, "CO_REGSAUD": str})
+    base = montar_base(municipios)
+
+    ultimo = int(municipios["ano"].max())
+    anos_teste = list(range(ultimo - args.anos_validacao + 1, ultimo + 1))
+    avaliacao = validar(base, anos_teste)
+    print(f"Validação (treina com os anos anteriores, testa em {anos_teste}):")
+    print(avaliacao.round(3).to_string(index=False))
+    print("\nMédia:")
+    print(avaliacao.groupby(["nivel", "metodo"]).mean(numeric_only=True)
+          .drop(columns="ano_alvo").round(3).to_string())
+
+    prev_mun, prev_reg, coef = prever_proximo_ano(base)
+    ano = int(prev_mun["ano_previsto"].iloc[0])
+    print("\nCoeficientes do modelo final:")
+    print(coef.round(3).to_string())
+
+    print(f"\nRegiões de saúde: RME prevista para {ano} (intervalo de 80%):")
+    print(prev_reg[["REGIAO_SAUDE", "rme_atual", "rme_prevista", "rme_prev_inf80",
+                    "rme_prev_sup80"]].round(2).to_string(index=False))
+
+    grandes = prev_mun[prev_mun["populacao_ultimo_ano"] >= args.pop_minima]
+    print(f"\nMunicípios com {args.pop_minima:,}+ habitantes, maiores RME previstas para {ano}:")
+    print(grandes.head(15)[["MUNICIPIO", "REGIAO_SAUDE", "rme_atual", "rme_prevista",
+                            "rme_prev_inf80", "rme_prev_sup80"]].round(2).to_string(index=False))
+
+    saidas = {
+        f"previsao_municipios_{args.uf}_{ano}.csv": prev_mun,
+        f"previsao_regioes_{args.uf}_{ano}.csv": prev_reg,
+        f"previsao_validacao_{args.uf}.csv": avaliacao,
+    }
+    for nome, tabela in saidas.items():
+        tabela.to_csv(RELATORIOS / nome, index=False)
+    print("\nTabelas:\n" + "\n".join(f"  {RELATORIOS / n}" for n in saidas))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="evitavel", description=__doc__)
     sub = parser.add_subparsers(required=True)
@@ -128,12 +172,18 @@ def main() -> None:
     for nome, func, ajuda in [
         ("baixar", cmd_baixar, "baixa os arquivos do SIH/SUS do DATASUS"),
         ("analisar", cmd_analisar, "calcula as internações evitáveis por município"),
+        ("prever", cmd_prever, "prevê a RME do ano seguinte por município e região"),
     ]:
         p = sub.add_parser(nome, help=ajuda)
         p.add_argument("--uf", default="RS", type=str.upper)
         if nome == "baixar":
             p.add_argument("--ano", type=int, required=True)
             p.add_argument("--meses", default="1-12", help="ex.: 1-12, 3 ou 1,4,7")
+        elif nome == "prever":
+            p.add_argument("--periodo", default="2015-2025",
+                           help="série gerada pelo 'analisar' (padrão: 2015-2025)")
+            p.add_argument("--anos-validacao", type=int, default=3,
+                           help="quantos anos finais usar na validação (padrão: 3)")
         else:
             p.add_argument("--anos", required=True, help="ex.: 2024, 2015-2025")
         if nome != "baixar":

@@ -14,8 +14,8 @@ evitáveis, para ajudar gestores de saúde a decidir onde investir.
 
 ## Status
 
-Fase 3: série 2015–2025 por município e por região de saúde, com taxas
-padronizadas por idade e sexo. Próximo: modelo de previsão.
+Fase 4: série 2015–2025 por município e região de saúde, com taxas
+padronizadas por idade e sexo, e previsão para 2026. Próximo: mapa ou painel.
 
 ## Como rodar
 
@@ -33,6 +33,9 @@ uv run evitavel baixar --uf RS --ano 2024 --meses 1
 # Calcula as internações evitáveis por município (um ano ou um período)
 uv run evitavel analisar --uf RS --anos 2024
 uv run evitavel analisar --uf RS --anos 2015-2025
+
+# Prevê a RME do ano seguinte (usa a série gerada acima)
+uv run evitavel prever --uf RS
 
 # Testes
 uv run pytest
@@ -77,6 +80,7 @@ Os arquivos lidos ficam em cache como Parquet em `data/processed/sih/`. Se o
 | `src/evitavel/populacao.py` | População por município, idade e sexo (POPSVS) |
 | `src/evitavel/territorio.py` | Regiões e macrorregiões de saúde |
 | `src/evitavel/padronizacao.py` | Padronização indireta por idade e sexo |
+| `src/evitavel/previsao.py` | Modelo de previsão e validação |
 | `src/evitavel/__init__.py` | Comandos `baixar` e `analisar` |
 | `data/raw/` | Arquivos `.dbc` baixados (fora do git) |
 | `data/processed/` | Cache em Parquet (fora do git) |
@@ -184,11 +188,57 @@ A RME é estável de um ano para o outro: a correlação entre 2024 e 2025 é de
 0,91 entre municípios e 0,97 entre regiões. Isso indica que dá para prever
 quem vai ficar acima do esperado.
 
+## Previsão para 2026
+
+O `prever` estima a RME do ano seguinte de cada município. O modelo é uma
+regressão de Poisson que usa as RMEs dos três anos anteriores (encolhidas em
+direção à média do estado nos municípios pequenos), a RME da região de saúde e
+a população. Detalhes em `src/evitavel/previsao.py`.
+
+**Validação.** Para cada ano de 2023 a 2025, o modelo foi treinado só com os
+anos anteriores e comparado com a regra mais simples possível: "a RME do ano
+que vem é igual à deste ano" (persistência).
+
+| Nível | Método | Erro médio na RME | Acerto dos 50 piores | Intervalo de 80% contém o real |
+| --- | --- | --- | --- | --- |
+| Município | Persistência | 0,108 | 72% | — |
+| Município | Modelo | 0,105 | 74% | 83% |
+| Região | Persistência | 0,051 | — | — |
+| Região | Modelo | 0,051 | — | 81% |
+
+"Acerto dos 50 piores" é a fração dos 50 municípios com maior RME real
+(entre os com 20+ ICSAP esperadas) que o método colocou entre os 50 maiores.
+
+- **O ganho do modelo sobre a persistência é pequeno.** Nos municípios, a
+  deviance de Poisson cai cerca de 9% (6,1 contra 6,7), sobretudo porque o
+  modelo não leva a sério picos de um ano só em municípios pequenos. Nas
+  regiões, os dois empatam. A RME muda pouco de um ano para o outro, então o
+  ano passado já é um bom previsor, e o modelo pesa basicamente a RME do
+  último ano (coeficiente 0,69) e a média dos três últimos (0,26).
+- **O valor prático está nos intervalos.** Eles foram calibrados na validação
+  e permitem dizer quais municípios devem continuar acima do esperado com
+  pouca chance de ser acaso. Nas regiões, o intervalo é alargado (fator 1,31)
+  porque municípios vizinhos sobem e descem juntos.
+- O modelo não sabe de mudanças que ainda não aparecem nos dados, como uma
+  nova equipe de saúde da família, o fechamento de um hospital ou uma
+  epidemia. Ele diz onde o problema deve continuar, não por quê.
+
+**Maiores RMEs previstas para 2026:**
+
+- Regiões: Caminho das Águas (1,55; intervalo de 80%: 1,43–1,66), Rota da
+  Produção (1,35) e Vale do Paranhana e Costa Serra (1,34).
+- Municípios com 20 mil habitantes ou mais: Encruzilhada do Sul (1,92;
+  1,59–2,26), Charqueadas (1,87), São Jerônimo (1,77), São Francisco de Paula
+  (1,77) e Parobé (1,66).
+
+As tabelas completas ficam em `reports/previsao_municipios_RS_2026.csv`,
+`reports/previsao_regioes_RS_2026.csv` e `reports/previsao_validacao_RS.csv`.
+
 ## Próximos passos
 
 1. ~~Baixar a população dos municípios (IBGE) e calcular taxas por 10 mil habitantes~~
 2. ~~Montar uma série histórica de 2015 em diante~~
 3. ~~Padronizar as taxas por idade e agrupar por região de saúde~~
-4. Treinar um primeiro modelo de previsão por município e região de saúde
+4. ~~Treinar um primeiro modelo de previsão por município e região de saúde~~
 5. Fazer um mapa ou painel para mostrar os resultados
 6. Apresentar para um grupo de pesquisa em saúde pública ou para o COSEMS-RS
