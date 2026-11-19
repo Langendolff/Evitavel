@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Internações evitáveis – __UF__</title>
+<style>
+:root {
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #6f6d68;
+  --grid: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11,11,11,.10); --hover: rgba(11,11,11,.04);
+  --band: rgba(82,81,78,.14); --sel: #0b0b0b;
+  --c0: #256abf; --c1: #6da7ec; --c2: #b7d3f6; --c3: #e9e8e4; --c4: #f5c0bb; --c5: #e8726e; --c6: #b8302f;
+  --nodata: #d6d5cf;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #9a9890;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,.10); --hover: rgba(255,255,255,.05);
+    --band: rgba(195,194,183,.16); --sel: #f0efec;
+    --c0: #86b6ef; --c1: #3987e5; --c2: #1c4f8f; --c3: #3a3a37; --c4: #7a2e2c; --c5: #d24a48; --c6: #f39591;
+    --nodata: #2a2a28;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #9a9890;
+  --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,.10); --hover: rgba(255,255,255,.05);
+  --band: rgba(195,194,183,.16); --sel: #f0efec;
+  --c0: #86b6ef; --c1: #3987e5; --c2: #1c4f8f; --c3: #3a3a37; --c4: #7a2e2c; --c5: #d24a48; --c6: #f39591;
+  --nodata: #2a2a28;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 26px; line-height: 1.2; margin: 0 0 6px; letter-spacing: -.01em; }
+h2 { font-size: 17px; margin: 0 0 10px; }
+h3 { font-size: 15px; margin: 18px 0 4px; }
+p { margin: 0 0 10px; }
+.sub { color: var(--ink-2); max-width: 78ch; }
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 16px; }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
+.tile .k { color: var(--ink-2); font-size: 13px; }
+.tile .v { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tile .n { color: var(--muted); font-size: 12px; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin: 0 0 12px; }
+.seg { display: inline-flex; border: 1px solid var(--ring); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); color: var(--ink-2); padding: 7px 12px; font: inherit; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+select, input[type="search"] { font: inherit; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--ring); border-radius: 8px; padding: 6px 10px; }
+label.chk { display: inline-flex; gap: 6px; align-items: center; color: var(--ink-2); cursor: pointer; }
+.main { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; }
+#mapa { width: 100%; height: auto; display: block; }
+#mapa path.m { stroke: var(--surface); stroke-width: .5; cursor: pointer; }
+#mapa path.m:hover { stroke: var(--ink); stroke-width: 1.2; }
+#mapa path.reg { fill: none; stroke: var(--ink-2); stroke-width: .9; pointer-events: none; opacity: .55; }
+#mapa.nivel-regiao path.reg { stroke-width: 1.4; opacity: .9; }
+#mapa path.selecao { fill: none; stroke: var(--sel); stroke-width: 2.4; pointer-events: none; }
+.legenda { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 10px; font-size: 12px; color: var(--ink-2); }
+.legenda span { display: inline-flex; align-items: center; gap: 5px; }
+.legenda i { width: 14px; height: 10px; border-radius: 2px; display: inline-block; border: 1px solid var(--ring); }
+.nota { font-size: 12px; color: var(--muted); margin-top: 6px; }
+#tip { position: fixed; pointer-events: none; z-index: 10; background: var(--surface); color: var(--ink);
+  border: 1px solid var(--ring); border-radius: 8px; padding: 8px 10px; font-size: 13px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.12); max-width: 300px; display: none; }
+#tip b { display: block; }
+#tip .l { color: var(--ink-2); }
+.det-nome { font-size: 20px; font-weight: 600; line-height: 1.25; }
+.det-reg { color: var(--ink-2); font-size: 13px; margin-bottom: 10px; }
+.mini { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+.mini > div { border: 1px solid var(--ring); border-radius: 8px; padding: 8px 10px; }
+.mini .k { color: var(--ink-2); font-size: 12px; }
+.mini .v { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mini .n { color: var(--muted); font-size: 12px; }
+#grafico { width: 100%; height: auto; display: block; overflow: visible; }
+#grafico text { fill: var(--muted); font-size: 11px; }
+#grafico .grid { stroke: var(--grid); stroke-width: 1; }
+#grafico .ref { stroke: var(--axis); stroke-width: 1.5; stroke-dasharray: 4 3; }
+#grafico .linha { fill: none; stroke: var(--ink-2); stroke-width: 2; stroke-linejoin: round; }
+#grafico .faixa { fill: var(--band); }
+#grafico .prev { fill: none; stroke: var(--ink-2); stroke-width: 2; stroke-dasharray: 4 3; }
+#grafico .ponto { fill: var(--ink-2); stroke: var(--surface); stroke-width: 2; }
+#grafico .whisker { stroke: var(--ink-2); stroke-width: 2; stroke-linecap: round; }
+#grafico .cross { stroke: var(--axis); stroke-width: 1; }
+.tabela-top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 8px; }
+.tw { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 7px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+th { color: var(--ink-2); font-weight: 600; font-size: 13px; cursor: pointer; user-select: none; }
+th[aria-sort="descending"]::after { content: " ↓"; }
+th[aria-sort="ascending"]::after { content: " ↑"; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--hover); }
+tbody tr.sel { background: var(--hover); font-weight: 600; }
+td .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; border: 1px solid var(--ring); vertical-align: -1px; }
+.tag { font-size: 12px; color: var(--ink-2); }
+button.link { border: 0; background: none; color: var(--ink); text-decoration: underline; font: inherit; cursor: pointer; padding: 0; }
+.metodo { columns: 2 340px; column-gap: 32px; color: var(--ink-2); font-size: 14px; }
+.metodo > div { break-inside: avoid; margin-bottom: 8px; }
+.metodo h3 { color: var(--ink); margin-top: 0; }
+.tema { margin-left: auto; }
+@media (max-width: 860px) {
+  .main { grid-template-columns: 1fr; }
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  h1 { font-size: 22px; }
+}
+@media print { .controls, .tema { display: none; } body { background: #fff; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Internações evitáveis no Rio Grande do Sul</h1>
+    <p class="sub">Internações por condições sensíveis à atenção primária (ICSAP): diabetes, hipertensão,
+      asma, pneumonias bacterianas, infecção urinária e outras que um bom atendimento no posto de saúde
+      costuma evitar. O mapa compara cada município com o que seria esperado para a idade e o sexo da sua
+      população.</p>
+  </header>
+
+  <section class="tiles" id="tiles" aria-label="Resumo do estado"></section>
+
+  <div class="controls" role="group" aria-label="Filtros">
+    <div class="seg" id="nivel">
+      <button type="button" data-v="municipio" aria-pressed="true">Municípios</button>
+      <button type="button" data-v="regiao" aria-pressed="false">Regiões de saúde</button>
+    </div>
+    <label>Ano <select id="ano"></select></label>
+    <label class="chk"><input type="checkbox" id="sig"> Só onde a diferença não é acaso</label>
+    <input type="search" id="busca" list="lista-areas" placeholder="Buscar município ou região" aria-label="Buscar">
+    <datalist id="lista-areas"></datalist>
+    <div class="seg tema" id="tema" aria-label="Tema">
+      <button type="button" data-v="auto" aria-pressed="true">Auto</button>
+      <button type="button" data-v="light" aria-pressed="false">Claro</button>
+      <button type="button" data-v="dark" aria-pressed="false">Escuro</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <section class="card" aria-label="Mapa">
+      <h2 id="titulo-mapa"></h2>
+      <svg id="mapa" role="img" aria-label="Mapa dos municípios coloridos pela razão de morbidade padronizada"></svg>
+      <div class="legenda" id="legenda"></div>
+      <p class="nota" id="nota-mapa"></p>
+    </section>
+    <section class="card" aria-live="polite" id="detalhe"></section>
+  </div>
+
+  <section class="card" style="margin-top:16px" aria-label="Tabela">
+    <div class="tabela-top">
+      <h2 id="titulo-tabela" style="margin:0"></h2>
+      <label class="tag" id="filtro-pop-wrap">População
+        <select id="filtro-pop">
+          <option value="0">todos</option>
+          <option value="5000">5 mil ou mais</option>
+          <option value="20000" selected>20 mil ou mais</option>
+          <option value="100000">100 mil ou mais</option>
+        </select>
+      </label>
+    </div>
+    <div class="tw"><table id="tabela"><thead></thead><tbody></tbody></table></div>
+    <p class="nota" id="nota-tabela"></p>
+  </section>
+
+  <section class="card metodo" style="margin-top:16px" aria-label="Como ler e método">
+    <div><h3>Como ler a RME</h3>
+      <p>A razão de morbidade padronizada (RME) divide as internações evitáveis observadas pelas
+      esperadas se o município tivesse as taxas do estado em cada faixa de idade e sexo. RME 1,30 quer dizer
+      30% acima do esperado; 0,80, 20% abaixo. A referência é o estado no mesmo ano.</p></div>
+    <div><h3>Acaso ou diferença real</h3>
+      <p>Em municípios pequenos, poucas internações mudam muito a RME. O intervalo de confiança de 95%
+      mostra a margem: se ele inteiro fica acima de 1, o município está acima do esperado com pouca chance
+      de ser acaso. Marque “Só onde a diferença não é acaso” para pintar de cinza os demais.</p></div>
+    <div><h3>Previsão</h3>
+      <p>A previsão vem de uma regressão de Poisson com as RMEs dos três anos anteriores e a RME da região,
+      validada em 2023–2025 sem olhar o futuro. O intervalo de 80% conteve o valor real em 83% dos
+      municípios. O ganho sobre “o ano que vem igual a este” é pequeno: a RME muda pouco de um ano para o
+      outro. O modelo não sabe de mudanças recentes, como uma nova equipe de saúde.</p></div>
+    <div><h3>Dados</h3>
+      <p>Internações: SIH/SUS (DATASUS), só residentes do estado e só internações pagas pelo SUS, contadas
+      pelo ano da internação. Lista de ICSAP: Portaria SAS/MS nº 221/2008. Partos fora do denominador da
+      proporção. População: estimativas do Ministério da Saúde por idade e sexo (POPSVS). Regiões de saúde:
+      base territorial do DATASUS. Contornos: IBGE.</p></div>
+  </section>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+const D = __DADOS__;
+const NS = "http://www.w3.org/2000/svg";
+const LIMITES = [0.7, 0.85, 0.95, 1.05, 1.2, 1.5];
+const ROTULOS = ["menos de 0,70", "0,70–0,85", "0,85–0,95", "0,95–1,05 (esperado)", "1,05–1,20", "1,20–1,50", "1,50 ou mais"];
+const PREV = "prev";
+const fmt = (v, c = 0) => v == null || isNaN(v) ? "–" : v.toLocaleString("pt-BR", { minimumFractionDigits: c, maximumFractionDigits: c });
+const reais = v => "R$ " + (v >= 1e6 ? fmt(v / 1e6, 1) + " mi" : fmt(v / 1e3, 0) + " mil");
+const pct = r => { const d = Math.round((r - 1) * 100); return d === 0 ? "igual ao esperado" : Math.abs(d) + "% " + (d > 0 ? "acima" : "abaixo") + " do esperado"; };
+
+const estado = { nivel: "municipio", ano: D.anos[D.anos.length - 1], sig: false, sel: null,
+                 ordem: { col: "rme", dir: -1 }, todos: false };
+const $ = id => document.getElementById(id);
+
+function classe(r) { let i = 0; while (i < LIMITES.length && r >= LIMITES[i]) i++; return i; }
+function cor(i) { return `var(--c${i})`; }
+
+// Valor de uma área no ano escolhido (ou na previsão)
+function valor(area) {
+  if (!area) return null;
+  if (estado.ano === PREV) {
+    const p = area.previsao; if (!p) return null;
+    const ult = area.serie[area.serie.length - 1];
+    return { ...p, prevista: true, pop: ult.pop, esp: ult.esp };
+  }
+  return area.serie.find(s => s.ano === estado.ano) || null;
+}
+function significativo(v) { return v && (v.lo > 1 || v.hi < 1); }
+function areaDoMunicipio(cod) { return estado.nivel === "regiao" ? D.regioes[D.municipios[cod].regiao] : D.municipios[cod]; }
+function codigoArea(cod) { return estado.nivel === "regiao" ? D.municipios[cod].regiao : cod; }
+function nomeArea(a) { return a.nome.replace(/^Região (\d+) - /, "$1 · "); }
+
+// ---------- mapa
+const svg = $("mapa");
+svg.setAttribute("viewBox", `-4 -4 ${D.largura + 8} ${D.altura + 8}`);
+const gMun = document.createElementNS(NS, "g"), gReg = document.createElementNS(NS, "g"), gSel = document.createElementNS(NS, "g");
+svg.append(gMun, gReg, gSel);
+const caminhos = {};
+for (const [cod, m] of Object.entries(D.municipios)) {
+  if (!m.caminho) continue;
+  const p = document.createElementNS(NS, "path");
+  p.setAttribute("d", m.caminho); p.setAttribute("class", "m"); p.dataset.cod = cod;
+  gMun.append(p); caminhos[cod] = p;
+}
+for (const d of Object.values(D.contornos)) {
+  const p = document.createElementNS(NS, "path"); p.setAttribute("d", d); p.setAttribute("class", "reg"); gReg.append(p);
+}
+
+function pintar() {
+  svg.classList.toggle("nivel-regiao", estado.nivel === "regiao");
+  for (const [cod, p] of Object.entries(caminhos)) {
+    const v = valor(areaDoMunicipio(cod));
+    let fill = "var(--nodata)";
+    if (v && v.rme != null) fill = estado.sig && !significativo(v) ? cor(3) : cor(classe(v.rme));
+    p.style.fill = fill;
+  }
+  desenharSelecao();
+}
+
+function desenharSelecao() {
+  gSel.replaceChildren();
+  if (!estado.sel) return;
+  const d = estado.nivel === "regiao" ? D.contornos[estado.sel] : D.municipios[estado.sel]?.caminho;
+  if (!d) return;
+  const p = document.createElementNS(NS, "path"); p.setAttribute("d", d); p.setAttribute("class", "selecao"); gSel.append(p);
+}
+
+function legenda() {
+  const sig = estado.sig ? `<span><i style="background:${cor(3)}"></i>dentro da margem de acaso</span>` : "";
+  $("legenda").innerHTML = ROTULOS.map((r, i) => `<span><i style="background:${cor(i)}"></i>${r}</span>`).join("")
+    + sig + `<span><i style="background:var(--nodata)"></i>sem dado</span>`;
+  const prev = estado.ano === PREV;
+  $("titulo-mapa").textContent = `RME ${prev ? "prevista para " + D.ano_previsto : "em " + estado.ano} · ${estado.nivel === "regiao" ? "regiões de saúde" : "municípios"}`;
+  $("nota-mapa").textContent = prev
+    ? "Azul: menos internações evitáveis que o esperado; vermelho: mais. Margem: intervalo de previsão de 80%."
+    : "Azul: menos internações evitáveis que o esperado para a idade e o sexo da população; vermelho: mais. Margem: intervalo de confiança de 95%.";
+}
+
+// ---------- tooltip
+const tip = $("tip");
+function textoArea(a, v) {
+  if (!v) return `<b>${a.nome}</b><span class="l">sem dado</span>`;
+  const reg = a.regiao ? `<div class="l">${D.regioes[a.regiao].nome}</div>` : `<div class="l">Macrorregião ${a.macro}</div>`;
+  const int = v.prevista ? "intervalo de 80%" : "IC 95%";
+  const linhas = [`RME ${fmt(v.rme, 2)} <span class="l">(${int}: ${fmt(v.lo, 2)}–${fmt(v.hi, 2)})</span>`,
+                  `<span class="l">${pct(v.rme)}${significativo(v) ? "" : " · pode ser acaso"}</span>`];
+  if (!v.prevista) linhas.push(`Taxa padronizada: ${fmt(v.taxa_pad, 0)} por 10 mil`,
+                               `<span class="l">${fmt(v.obs)} ICSAP · ${fmt(v.esp)} esperadas · ${fmt(v.pop)} hab.</span>`);
+  else linhas.push(`<span class="l">≈ ${fmt(v.obs)} ICSAP previstas</span>`);
+  return `<b>${a.nome}</b>${reg}` + linhas.map(l => `<div>${l}</div>`).join("");
+}
+svg.addEventListener("pointermove", e => {
+  const cod = e.target.dataset?.cod; if (!cod) { tip.style.display = "none"; return; }
+  const a = areaDoMunicipio(cod);
+  tip.innerHTML = textoArea(a, valor(a)); tip.style.display = "block";
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = e.clientX + 14, y = e.clientY + 14;
+  if (x + w > innerWidth - 8) x = e.clientX - w - 14;
+  if (y + h > innerHeight - 8) y = e.clientY - h - 14;
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+});
+svg.addEventListener("pointerleave", () => tip.style.display = "none");
+svg.addEventListener("click", e => { const cod = e.target.dataset?.cod; if (cod) selecionar(codigoArea(cod)); });
+
+// ---------- resumo do estado
+function tiles() {
+  const ano = estado.ano === PREV ? D.anos[D.anos.length - 1] : estado.ano;
+  const s = D.estado.find(x => x.ano === ano), base = D.estado[0];
+  const dif = Math.round((s.taxa / base.taxa - 1) * 100);
+  $("tiles").innerHTML = [
+    ["Internações evitáveis", fmt(s.obs), `residentes do RS, ${ano}`],
+    ["Parte das internações", fmt(s.prop, 1) + "%", "sem contar partos"],
+    ["Por 10 mil habitantes", fmt(s.taxa, 0), `${dif > 0 ? "+" : ""}${dif}% desde ${base.ano}`],
+    ["Custo para o SUS", reais(s.custo), "valores nominais"],
+  ].map(([k, v, n]) => `<div class="card tile"><div class="k">${k}</div><div class="v">${v}</div><div class="n">${n}</div></div>`).join("");
+}
+
+// ---------- detalhe e gráfico
+function areaSelecionada() { return estado.sel ? (estado.nivel === "regiao" ? D.regioes[estado.sel] : D.municipios[estado.sel]) : null; }
+
+function detalhe() {
+  const a = areaSelecionada(), el = $("detalhe");
+  if (!a) {
+    el.innerHTML = `<h2>Escolha uma área</h2><p class="sub">Clique no mapa, na tabela ou use a busca para ver a série de 2015 a ${D.anos[D.anos.length - 1]} e a previsão para ${D.ano_previsto}.</p>`;
+    return;
+  }
+  const ult = a.serie[a.serie.length - 1], p = a.previsao;
+  const reg = a.regiao ? D.regioes[a.regiao].nome : "Macrorregião " + a.macro;
+  el.innerHTML = `<div class="det-nome">${a.nome}</div><div class="det-reg">${reg} · ${fmt(ult.pop)} habitantes (${ult.ano})</div>
+    <div class="mini">
+      <div><div class="k">RME ${ult.ano}</div><div class="v">${fmt(ult.rme, 2)}</div><div class="n">${pct(ult.rme)}</div></div>
+      <div><div class="k">Prevista ${D.ano_previsto}</div><div class="v">${p ? fmt(p.rme, 2) : "–"}</div><div class="n">${p ? "80%: " + fmt(p.lo, 2) + "–" + fmt(p.hi, 2) : ""}</div></div>
+      <div><div class="k">Taxa padronizada ${ult.ano}</div><div class="v">${fmt(ult.taxa_pad, 0)}</div><div class="n">por 10 mil · bruta ${fmt(ult.taxa, 0)}</div></div>
+      <div><div class="k">ICSAP ${ult.ano}</div><div class="v">${fmt(ult.obs)}</div><div class="n">${fmt(ult.esp)} esperadas · ${reais(ult.custo)}</div></div>
+    </div>
+    <h3 style="margin-top:4px">RME ao longo dos anos</h3>
+    <svg id="grafico" role="img" aria-label="Série da RME de ${a.nome}"></svg>
+    <p class="nota">Faixa: IC 95%. Último ponto: previsão para ${D.ano_previsto} com intervalo de 80%. Linha tracejada em 1: o esperado.</p>`;
+  grafico(a);
+}
+
+function grafico(a) {
+  const g = $("grafico"), W = 440, H = 210, m = { t: 10, r: 14, b: 24, l: 34 };
+  g.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const s = a.serie, p = a.previsao;
+  const anos = [...s.map(x => x.ano), D.ano_previsto];
+  const vals = s.flatMap(x => [x.lo, x.hi]).concat(p ? [p.lo, p.hi] : []).concat([1]).filter(v => v != null && isFinite(v));
+  let y0 = Math.min(...vals), y1 = Math.max(...vals);
+  const pad = (y1 - y0) * 0.08 || 0.1; y0 = Math.max(0, y0 - pad); y1 = y1 + pad;
+  const X = ano => m.l + (ano - anos[0]) / (anos[anos.length - 1] - anos[0]) * (W - m.l - m.r);
+  const Y = v => m.t + (1 - (v - y0) / (y1 - y0)) * (H - m.t - m.b);
+  const passo = (y1 - y0) > 1.2 ? 0.5 : (y1 - y0) > 0.5 ? 0.2 : 0.1;
+  let h = "";
+  for (let v = Math.ceil(y0 / passo) * passo; v <= y1 + 1e-9; v += passo)
+    h += `<line class="grid" x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${m.l - 6}" y="${Y(v) + 4}" text-anchor="end">${fmt(v, passo < 0.2 ? 1 : 1)}</text>`;
+  for (const ano of anos) if ((ano - anos[0]) % 2 === 0 || ano === D.ano_previsto)
+    h += `<text x="${X(ano)}" y="${H - 6}" text-anchor="middle">${ano}</text>`;
+  h += `<line class="ref" x1="${m.l}" x2="${W - m.r}" y1="${Y(1)}" y2="${Y(1)}"/>`;
+  const faixa = s.map(x => `${X(x.ano)},${Y(x.hi)}`).concat([...s].reverse().map(x => `${X(x.ano)},${Y(x.lo)}`));
+  h += `<polygon class="faixa" points="${faixa.join(" ")}"/>`;
+  h += `<polyline class="linha" points="${s.map(x => `${X(x.ano)},${Y(x.rme)}`).join(" ")}"/>`;
+  if (p) {
+    const u = s[s.length - 1], xp = X(D.ano_previsto);
+    h += `<line class="prev" x1="${X(u.ano)}" y1="${Y(u.rme)}" x2="${xp}" y2="${Y(p.rme)}"/>`;
+    h += `<line class="whisker" x1="${xp}" x2="${xp}" y1="${Y(p.lo)}" y2="${Y(p.hi)}"/>`;
+    h += `<circle class="ponto" cx="${xp}" cy="${Y(p.rme)}" r="5"/>`;
+  }
+  h += `<line class="cross" id="cross" y1="${m.t}" y2="${H - m.b}" style="display:none"/>`;
+  h += `<rect x="${m.l}" y="${m.t}" width="${W - m.l - m.r}" height="${H - m.t - m.b}" fill="transparent" id="alvo"/>`;
+  g.innerHTML = h;
+
+  const alvo = g.querySelector("#alvo"), cross = g.querySelector("#cross");
+  alvo.addEventListener("pointermove", e => {
+    const r = g.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * W;
+    let ano = anos.reduce((b, an) => Math.abs(X(an) - x) < Math.abs(X(b) - x) ? an : b, anos[0]);
+    cross.setAttribute("x1", X(ano)); cross.setAttribute("x2", X(ano)); cross.style.display = "";
+    const v = ano === D.ano_previsto ? (p && { ...p, prevista: true }) : s.find(z => z.ano === ano);
+    if (!v) return;
+    const int = v.prevista ? "80%" : "IC 95%";
+    tip.innerHTML = `<b>${ano}${v.prevista ? " (previsão)" : ""}</b><div>RME ${fmt(v.rme, 2)}</div><div class="l">${int}: ${fmt(v.lo, 2)}–${fmt(v.hi, 2)}</div>`
+      + (v.prevista ? "" : `<div class="l">${fmt(v.obs)} ICSAP · taxa padronizada ${fmt(v.taxa_pad, 0)}</div>`);
+    tip.style.display = "block";
+    tip.style.left = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8) + "px";
+    tip.style.top = (e.clientY + 14) + "px";
+  });
+  alvo.addEventListener("pointerleave", () => { cross.style.display = "none"; tip.style.display = "none"; });
+}
+
+// ---------- tabela
+const COLS = [
+  { id: "nome", t: "Área", v: (a) => a.nome, f: (a) => nomeArea(a) },
+  { id: "regiao", t: "Região", v: (a) => a.regiao ? D.regioes[a.regiao].nome : a.macro, f: (a) => a.regiao ? nomeArea(D.regioes[a.regiao]) : a.macro },
+  { id: "pop", t: "População", v: (a, v) => v?.pop, f: (a, v) => fmt(v?.pop) },
+  { id: "obs", t: "ICSAP", v: (a, v) => v?.obs, f: (a, v) => fmt(v?.obs) },
+  { id: "taxa_pad", t: "Taxa padr. /10 mil", v: (a, v) => v?.taxa_pad, f: (a, v) => fmt(v?.taxa_pad, 0) },
+  { id: "rme", t: "RME", v: (a, v) => v?.rme, f: (a, v) => v ? `<span class="sw" style="background:${cor(classe(v.rme))}"></span>${fmt(v.rme, 2)}` : "–" },
+  { id: "ic", t: "Margem", v: (a, v) => v?.lo, f: (a, v) => v ? `${fmt(v.lo, 2)}–${fmt(v.hi, 2)}${significativo(v) ? "" : " <span class='tag'>(acaso?)</span>"}` : "–" },
+  { id: "prev", t: `Prevista ${D.ano_previsto}`, v: (a) => a.previsao?.rme, f: (a) => fmt(a.previsao?.rme, 2) },
+];
+
+function tabela() {
+  const reg = estado.nivel === "regiao", prev = estado.ano === PREV;
+  const minPop = reg ? 0 : +$("filtro-pop").value;
+  $("filtro-pop-wrap").style.display = reg ? "none" : "";
+  const fonte = reg ? D.regioes : D.municipios;
+  let linhas = Object.entries(fonte).map(([cod, a]) => ({ cod, a, v: valor(a) }))
+    .filter(l => l.v && (l.v.pop ?? 0) >= minPop);
+  const col = COLS.find(c => c.id === estado.ordem.col);
+  linhas.sort((x, y) => {
+    const a = col.v(x.a, x.v), b = col.v(y.a, y.v);
+    if (a == null) return 1; if (b == null) return -1;
+    return (typeof a === "string" ? a.localeCompare(b, "pt-BR") : a - b) * estado.ordem.dir;
+  });
+  const total = linhas.length, limite = estado.todos || reg ? total : 30;
+  const cols = COLS.filter(c => !(prev && ["obs", "taxa_pad"].includes(c.id)) && !(reg && c.id === "regiao"));
+  $("tabela").tHead.innerHTML = "<tr>" + cols.map(c =>
+    `<th data-col="${c.id}" aria-sort="${c.id === estado.ordem.col ? (estado.ordem.dir < 0 ? "descending" : "ascending") : "none"}">${c.id === "rme" && prev ? "RME prevista" : c.id === "ic" && prev ? "Intervalo 80%" : c.t}</th>`).join("") + "</tr>";
+  $("tabela").tBodies[0].innerHTML = linhas.slice(0, limite).map(l =>
+    `<tr data-cod="${l.cod}" class="${l.cod === estado.sel ? "sel" : ""}">` + cols.map(c => `<td>${c.f(l.a, l.v)}</td>`).join("") + "</tr>").join("");
+  $("titulo-tabela").textContent = `${reg ? "Regiões de saúde" : "Municípios"} · ${prev ? "previsão " + D.ano_previsto : estado.ano}`;
+  $("nota-tabela").innerHTML = (limite < total ? `Mostrando ${limite} de ${total}. <button class="link" id="ver-todos">Ver todos</button> · ` : "")
+    + "Clique no cabeçalho para ordenar. “(acaso?)”: a margem inclui 1, então a diferença pode ser só acaso.";
+  $("ver-todos")?.addEventListener("click", () => { estado.todos = true; tabela(); });
+}
+$("tabela").tHead.addEventListener("click", e => {
+  const c = e.target.closest("th")?.dataset.col; if (!c) return;
+  estado.ordem = { col: c, dir: estado.ordem.col === c ? -estado.ordem.dir : (["nome", "regiao"].includes(c) ? 1 : -1) };
+  tabela();
+});
+$("tabela").tBodies[0].addEventListener("click", e => { const cod = e.target.closest("tr")?.dataset.cod; if (cod) selecionar(cod); });
+
+// ---------- controles
+function selecionar(cod) { estado.sel = cod; desenharSelecao(); detalhe(); tabela(); }
+function atualizar() { pintar(); legenda(); tiles(); tabela(); detalhe(); }
+
+const selAno = $("ano");
+selAno.innerHTML = [...D.anos].reverse().map(a => `<option value="${a}">${a}</option>`).join("")
+  + `<option value="${PREV}">${D.ano_previsto} (previsão)</option>`;
+selAno.addEventListener("change", () => { estado.ano = selAno.value === PREV ? PREV : +selAno.value; atualizar(); });
+$("sig").addEventListener("change", e => { estado.sig = e.target.checked; pintar(); legenda(); });
+$("filtro-pop").addEventListener("change", () => { estado.todos = false; tabela(); });
+$("nivel").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const novo = b.dataset.v; if (novo === estado.nivel) return;
+  // Ao trocar de nível, mantém a seleção coerente: município -> sua região.
+  if (estado.sel) estado.sel = novo === "regiao" ? (D.municipios[estado.sel]?.regiao ?? null) : null;
+  estado.nivel = novo; estado.todos = false;
+  for (const x of $("nivel").children) x.setAttribute("aria-pressed", x === b);
+  atualizar();
+});
+
+const lista = $("lista-areas"), porNome = {};
+for (const [cod, m] of Object.entries(D.municipios)) { porNome[m.nome] = ["municipio", cod]; }
+for (const [cod, r] of Object.entries(D.regioes)) { porNome[r.nome] = ["regiao", cod]; }
+lista.innerHTML = Object.keys(porNome).sort((a, b) => a.localeCompare(b, "pt-BR")).map(n => `<option value="${n}">`).join("");
+$("busca").addEventListener("change", e => {
+  const alvo = porNome[e.target.value]; if (!alvo) return;
+  if (alvo[0] !== estado.nivel) $("nivel").querySelector(`[data-v="${alvo[0]}"]`).click();
+  selecionar(alvo[1]); e.target.value = "";
+});
+
+function tema(v) {
+  if (v === "auto") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", v);
+  for (const x of $("tema").children) x.setAttribute("aria-pressed", x.dataset.v === v);
+  try { localStorage.setItem("evitavel-tema", v); } catch (e) {}
+}
+$("tema").addEventListener("click", e => { const b = e.target.closest("button"); if (b) tema(b.dataset.v); });
+try { const t = localStorage.getItem("evitavel-tema"); if (t) tema(t); } catch (e) {}
+
+// Estado inicial pelo endereço: #nivel=regiao&sel=43015&ano=prev&tema=dark&sig=1
+const h = new URLSearchParams(location.hash.slice(1));
+if (h.get("tema")) tema(h.get("tema"));
+if (h.get("nivel") === "regiao") {
+  estado.nivel = "regiao";
+  for (const x of $("nivel").children) x.setAttribute("aria-pressed", x.dataset.v === "regiao");
+}
+if (h.get("ano")) { estado.ano = h.get("ano") === PREV ? PREV : +h.get("ano"); selAno.value = h.get("ano"); }
+if (h.get("sig") === "1") { estado.sig = true; $("sig").checked = true; }
+estado.sel = h.get("sel") || (estado.nivel === "regiao" ? D.municipios["431490"]?.regiao : "431490");
+atualizar();
+</script>
+</body>
+</html>

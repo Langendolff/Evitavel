@@ -165,6 +165,16 @@ def cmd_prever(args: argparse.Namespace) -> None:
     print("\nTabelas:\n" + "\n".join(f"  {RELATORIOS / n}" for n in saidas))
 
 
+def cmd_painel(args: argparse.Namespace) -> None:
+    from evitavel.painel import gerar_painel
+
+    try:
+        saida = gerar_painel(args.uf, RELATORIOS, DADOS_BRUTOS, args.periodo)
+    except FileNotFoundError as e:
+        raise SystemExit(f"{e.filename} não existe. Rode 'analisar' e 'prever' antes.")
+    print(f"Painel: {saida} ({saida.stat().st_size / 1e6:.1f} MB)")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="evitavel", description=__doc__)
     sub = parser.add_subparsers(required=True)
@@ -173,12 +183,16 @@ def main() -> None:
         ("baixar", cmd_baixar, "baixa os arquivos do SIH/SUS do DATASUS"),
         ("analisar", cmd_analisar, "calcula as internações evitáveis por município"),
         ("prever", cmd_prever, "prevê a RME do ano seguinte por município e região"),
+        ("painel", cmd_painel, "gera o painel em HTML com mapa, série e previsão"),
     ]:
         p = sub.add_parser(nome, help=ajuda)
         p.add_argument("--uf", default="RS", type=str.upper)
         if nome == "baixar":
             p.add_argument("--ano", type=int, required=True)
             p.add_argument("--meses", default="1-12", help="ex.: 1-12, 3 ou 1,4,7")
+        elif nome == "painel":
+            p.add_argument("--periodo", default="2015-2025",
+                           help="série gerada pelo 'analisar' (padrão: 2015-2025)")
         elif nome == "prever":
             p.add_argument("--periodo", default="2015-2025",
                            help="série gerada pelo 'analisar' (padrão: 2015-2025)")
@@ -186,7 +200,7 @@ def main() -> None:
                            help="quantos anos finais usar na validação (padrão: 3)")
         else:
             p.add_argument("--anos", required=True, help="ex.: 2024, 2015-2025")
-        if nome != "baixar":
+        if nome in ("analisar", "prever"):
             p.add_argument("--pop-minima", type=int, default=20_000,
                            help="população mínima no ranking da tela (padrão: 20000)")
         p.set_defaults(func=func)

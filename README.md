@@ -14,8 +14,11 @@ evitáveis, para ajudar gestores de saúde a decidir onde investir.
 
 ## Status
 
-Fase 4: série 2015–2025 por município e região de saúde, com taxas
-padronizadas por idade e sexo, e previsão para 2026. Próximo: mapa ou painel.
+Fase 5: série 2015–2025 por município e região de saúde, taxas padronizadas
+por idade e sexo, previsão para 2026 e painel em HTML. Próximo: apresentar.
+
+**Painel:** abra `reports/painel_icsap_RS.html` no navegador. É um arquivo
+único, funciona sem internet e pode ser enviado por e-mail.
 
 ## Como rodar
 
@@ -36,6 +39,9 @@ uv run evitavel analisar --uf RS --anos 2015-2025
 
 # Prevê a RME do ano seguinte (usa a série gerada acima)
 uv run evitavel prever --uf RS
+
+# Gera o painel em HTML (usa as tabelas dos dois comandos acima)
+uv run evitavel painel --uf RS
 
 # Testes
 uv run pytest
@@ -81,6 +87,7 @@ Os arquivos lidos ficam em cache como Parquet em `data/processed/sih/`. Se o
 | `src/evitavel/territorio.py` | Regiões e macrorregiões de saúde |
 | `src/evitavel/padronizacao.py` | Padronização indireta por idade e sexo |
 | `src/evitavel/previsao.py` | Modelo de previsão e validação |
+| `src/evitavel/painel.py`, `painel_modelo.html` | Painel em HTML (mapa, série, previsão) |
 | `src/evitavel/__init__.py` | Comandos `baixar` e `analisar` |
 | `data/raw/` | Arquivos `.dbc` baixados (fora do git) |
 | `data/processed/` | Cache em Parquet (fora do git) |
@@ -234,11 +241,38 @@ que vem é igual à deste ano" (persistência).
 As tabelas completas ficam em `reports/previsao_municipios_RS_2026.csv`,
 `reports/previsao_regioes_RS_2026.csv` e `reports/previsao_validacao_RS.csv`.
 
+## Painel
+
+`reports/painel_icsap_RS.html` mostra:
+
+- **Mapa** dos 497 municípios ou das 30 regiões de saúde, colorido pela RME
+  (azul abaixo do esperado, vermelho acima), de 2015 a 2025 ou na previsão
+  para 2026. A opção "Só onde a diferença não é acaso" pinta de cinza as
+  áreas cuja margem inclui 1.
+- **Detalhe** da área escolhida: RME, taxa padronizada, ICSAP observadas e
+  esperadas, custo e a série de 2015 a 2026 com as margens.
+- **Tabela** ordenável, com filtro por tamanho de município.
+- Tema claro e escuro, e funciona no celular.
+
+Dá para mandar um link que já abre numa área, acrescentando ao endereço
+`#sel=<código>`. Exemplos: `#sel=431490` abre Porto Alegre;
+`#nivel=regiao&sel=43015` abre a Região 15; `&ano=prev` mostra a previsão;
+`&sig=1` liga o filtro de acaso.
+
+## A investigar
+
+- **Canoas** cai de RME 0,94 em 2024 para 0,72 em 2025, mas o total de
+  internações de moradores também cai 23% (de 28.311 para 21.836). Isso sugere
+  menos leitos ou mudança no registro, e não melhora da atenção básica. Pode
+  ter relação com a enchente de maio de 2024, que fechou hospitais da cidade.
+  Vale conferir antes de usar esse número. O mesmo cuidado vale para outros
+  municípios atingidos pela enchente.
+
 ## Próximos passos
 
 1. ~~Baixar a população dos municípios (IBGE) e calcular taxas por 10 mil habitantes~~
 2. ~~Montar uma série histórica de 2015 em diante~~
 3. ~~Padronizar as taxas por idade e agrupar por região de saúde~~
 4. ~~Treinar um primeiro modelo de previsão por município e região de saúde~~
-5. Fazer um mapa ou painel para mostrar os resultados
+5. ~~Fazer um mapa ou painel para mostrar os resultados~~
 6. Apresentar para um grupo de pesquisa em saúde pública ou para o COSEMS-RS
